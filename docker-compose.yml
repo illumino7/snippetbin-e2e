@@ -1,0 +1,16 @@
+services:
+  db:
+    build: .
+    container_name: snippetbin-e2e-db
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=adminpassword
+      - POSTGRES_DB=snippetbin-e2e
+    ports:
+      - "5432:5432"
+    volumes:
+      - snippetbin-e2e-db-data:/var/lib/postgresql
+    command: postgres -c shared_preload_libraries=pg_cron -c cron.database_name=snippetbin-e2e
+
+volumes:
+  snippetbin-e2e-db-data:
