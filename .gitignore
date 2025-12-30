@@ -31,6 +31,7 @@ go.work.sum
 # .idea/
 # .vscode/
 /bin
+/tmp
 .infisical.json
 .envrc
 .env
