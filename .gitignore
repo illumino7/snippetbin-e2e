@@ -34,3 +34,8 @@ go.work.sum
 .infisical.json
 .envrc
 .env
+/tls
+server.crt
+server.key
+cert.pem
+key.pem

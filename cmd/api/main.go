@@ -2,9 +2,11 @@ package main
 
 import (
 	"log/slog"
+	"net/http"
 	"os"
 	"time"
 
+	"github.com/illumino7/snippetbin-e2e/internal/db"
 	"github.com/illumino7/snippetbin-e2e/internal/env"
 )
 
@@ -18,13 +20,39 @@ func main() {
 		},
 	}
 
+	//logger
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{AddSource: true}))
 	logger.Info("application started")
-	db, err := OpenSQLDB(cfg.db)
+
+	//database
+	pgdb, err := OpenSQLDB(cfg.db)
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
-	defer db.Close()
+	defer pgdb.Close()
 	logger.Info("database connection pool established")
+	store := db.NewPostgresStore(pgdb)
+
+	app := application{
+		logger: logger,
+		db:     store,
+	}
+
+	//server
+	srv := &http.Server{
+		Addr:         ":5050",
+		Handler:      app.routes(),
+		ErrorLog:     slog.NewLogLogger(logger.Handler(), slog.LevelError),
+		IdleTimeout:  time.Minute,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
+
+	app.logger.Info("server started")
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		app.logger.Error(err.Error())
+		os.Exit(1)
+	}
+
 }
