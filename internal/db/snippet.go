@@ -9,49 +9,36 @@ import (
 )
 
 type Snippet struct {
-	ID        uuid.UUID `json:"id"`
-	Title     []byte    `json:"title_ciphertext"`
-	Content   []byte    `json:"content_ciphertext"`
-	IV        []byte    `json:"iv"`
-	CreatedAt time.Time `json:"created_at"`
-	ExpiresAt time.Time `json:"expires_at"`
+	ShortURL  string
+	ID        uuid.UUID
+	ExpiresAt time.Time
 }
 
 type SnippetModel struct {
 	db *sql.DB
 }
 
-func (m *SnippetModel) Insert(ctx context.Context, s *Snippet) (uuid.UUID, error) {
-	newID, err := uuid.NewV7()
-	if err != nil {
-		return uuid.Nil, err
-	}
-	s.ID = newID
+func (m *SnippetModel) Insert(ctx context.Context, s *Snippet) error {
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeOutDuration)
 	defer cancel()
-	stmt := `INSERT INTO snippets (id, title, content, iv, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6)`
-	err = m.db.QueryRowContext(ctx, stmt, s.ID, s.Title, s.Content, s.IV, s.CreatedAt, s.ExpiresAt).Scan(&s.CreatedAt)
+	stmt := `INSERT INTO snippets (short_url, id, expires_at) VALUES ($1, $2, $3)`
+	_, err := m.db.ExecContext(ctx, stmt, s.ShortURL, s.ID, s.ExpiresAt)
 	if err != nil {
-		return uuid.Nil, err
+		return err
 	}
-	return s.ID, nil
+	return nil
 }
 
-func (m *SnippetModel) Get(ctx context.Context, id uuid.UUID) (*Snippet, error) {
+func (m *SnippetModel) Get(ctx context.Context, shortURL string) (*Snippet, error) {
 	query := `
-        SELECT id, title_ciphertext, content_ciphertext, iv, created_at, expires_at
+        SELECT id, expires_at
         FROM snippets
-        WHERE id = $1 AND expires_at > NOW()`
-
+        WHERE short_url = $1 AND expires_at > NOW()`
 	var s Snippet
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeOutDuration)
 	defer cancel()
-	err := m.db.QueryRowContext(ctx, query, id).Scan(
+	err := m.db.QueryRowContext(ctx, query, shortURL).Scan(
 		&s.ID,
-		&s.Title,
-		&s.Content,
-		&s.IV,
-		&s.CreatedAt,
 		&s.ExpiresAt,
 	)
 	if err != nil {

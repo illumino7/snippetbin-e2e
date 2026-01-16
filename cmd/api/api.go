@@ -36,6 +36,7 @@ type application struct {
 	logger *slog.Logger
 	db     db.Storage
 	s3     *minio.Client
+	cfg    config
 }
 
 func (app *application) routes() http.Handler {
@@ -49,7 +50,12 @@ func (app *application) routes() http.Handler {
 	r.Use(commonHeaders)
 
 	//routes
-	r.Get("/health", health)
+	r.Route("/api", func(r chi.Router) {
+		r.Get("/health", health)
+		r.Get("/snippets/presigned", app.presignedURL)
+		r.Post("/snippets", app.createSnippet)
+		r.Get("/snippets/{short_code}", app.getSnippet)
+	})
 
 	return r
 }

@@ -54,6 +54,7 @@ func main() {
 		logger: logger,
 		db:     store,
 		s3:     s3,
+		cfg:    cfg,
 	}
 
 	//testing minio s3 connection
