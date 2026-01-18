@@ -31,13 +31,14 @@ func (m *SnippetModel) Insert(ctx context.Context, s *Snippet) error {
 
 func (m *SnippetModel) Get(ctx context.Context, shortURL string) (*Snippet, error) {
 	query := `
-        SELECT id, expires_at
+        SELECT short_url, id, expires_at
         FROM snippets
         WHERE short_url = $1 AND expires_at > NOW()`
 	var s Snippet
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeOutDuration)
 	defer cancel()
 	err := m.db.QueryRowContext(ctx, query, shortURL).Scan(
+		&s.ShortURL,
 		&s.ID,
 		&s.ExpiresAt,
 	)

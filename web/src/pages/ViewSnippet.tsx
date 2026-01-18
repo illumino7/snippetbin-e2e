@@ -18,7 +18,7 @@ interface DecryptedData {
   language: string
 }
 
-export function ViewSnippet() {
+export function ViewSnippet({ setShowNewSnippet }: { setShowNewSnippet: (show: boolean) => void }) {
   const { shortCode } = useParams<{ shortCode: string }>()
   const navigate = useNavigate()
   const [encryptionKey, setEncryptionKey] = useState('')
@@ -26,6 +26,11 @@ export function ViewSnippet() {
   const [decryptionError, setDecryptionError] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showQR, setShowQR] = useState(false)
+
+  // Control navbar button visibility - only show when successfully decrypted
+  useEffect(() => {
+    setShowNewSnippet(decryptedData !== null && !decryptionError)
+  }, [decryptedData, decryptionError, setShowNewSnippet])
 
   // Extract encryption key from URL fragment
   useEffect(() => {
@@ -170,7 +175,7 @@ export function ViewSnippet() {
               ) : (
                 <>
                   <Copy className="h-4 w-4" />
-                  Copy Code
+                  Copy Snippet
                 </>
               )}
             </Button>
@@ -229,12 +234,7 @@ export function ViewSnippet() {
           </SyntaxHighlighter>
         </div>
 
-        {/* Actions */}
-        <div className="flex gap-4">
-          <Button onClick={() => navigate('/')} variant="default">
-            Create New Snippet
-          </Button>
-        </div>
+
       </div>
     </div>
   )

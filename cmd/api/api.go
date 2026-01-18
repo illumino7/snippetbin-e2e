@@ -7,8 +7,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/illumino7/snippetbin-e2e/internal/cache"
 	"github.com/illumino7/snippetbin-e2e/internal/db"
-	"github.com/minio/minio-go/v7"
+	"github.com/illumino7/snippetbin-e2e/internal/s3"
 )
 
 type dbConfig struct {
@@ -26,16 +27,23 @@ type s3Config struct {
 	useSSL    bool
 }
 
-type config struct {
+type cacheConfig struct {
 	addr string
-	db   dbConfig
-	s3   s3Config
+	port int
+}
+
+type config struct {
+	addr  string
+	db    dbConfig
+	s3    s3Config
+	cache cacheConfig
 }
 
 type application struct {
 	logger *slog.Logger
 	db     db.Storage
-	s3     *minio.Client
+	s3     s3.Storage
+	cache  cache.Storage
 	cfg    config
 }
 

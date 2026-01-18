@@ -7,8 +7,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/illumino7/snippetbin-e2e/internal/cache"
 	"github.com/illumino7/snippetbin-e2e/internal/db"
 	"github.com/illumino7/snippetbin-e2e/internal/env"
+	"github.com/illumino7/snippetbin-e2e/internal/s3"
 )
 
 func main() {
@@ -26,6 +28,10 @@ func main() {
 			bucket:    env.GetString("S3_BUCKET", ""),
 			useSSL:    env.GetBool("S3_USE_SSL", false),
 		},
+		cache: cacheConfig{
+			addr: env.GetString("CACHE_ADDR", ""),
+			port: env.GetInt("CACHE_PORT", 6379),
+		},
 	}
 
 	//logger
@@ -33,7 +39,7 @@ func main() {
 	logger.Info("application started")
 
 	//database
-	pgdb, err := OpenSQLDB(cfg.db)
+	pgdb, err := db.OpenSQLDB(cfg.db.addr, cfg.db.maxOpenConns, cfg.db.maxIdleConns, cfg.db.maxIdleTime)
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
@@ -43,22 +49,33 @@ func main() {
 	store := db.NewPostgresStore(pgdb)
 
 	//s3
-	s3, err := NewS3Conn(cfg.s3)
+	s3Client, err := s3.NewS3Conn(cfg.s3.endpoint, cfg.s3.accessKey, cfg.s3.secretKey, cfg.s3.useSSL, cfg.s3.bucket)
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
 	logger.Info("s3 connection established")
+	s3Store := s3.NewMinioStorage(s3Client, cfg.s3.bucket)
+
+	//valkey
+	valkey, err := cache.NewValkeyConn(cfg.cache.addr, cfg.cache.port)
+	if err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
+	logger.Info("valkey connection established")
+	cacheStore := cache.NewValkeyStore(valkey)
 
 	app := application{
 		logger: logger,
 		db:     store,
-		s3:     s3,
+		s3:     s3Store,
+		cache:  cacheStore,
 		cfg:    cfg,
 	}
 
 	//testing minio s3 connection
-	found, err := s3.BucketExists(context.Background(), cfg.s3.bucket)
+	found, err := s3Client.BucketExists(context.Background(), cfg.s3.bucket)
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)

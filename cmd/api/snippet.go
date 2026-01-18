@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
@@ -12,7 +11,6 @@ import (
 	"github.com/gofrs/uuid/v5"
 
 	"github.com/illumino7/snippetbin-e2e/internal/db"
-	"github.com/minio/minio-go/v7"
 )
 
 type snippetCreate struct {
@@ -63,14 +61,14 @@ func (app *application) presignedURL(w http.ResponseWriter, r *http.Request) {
 		WriteJSONError(w, http.StatusInternalServerError, "failed to generate uuid")
 		return
 	}
-	presignedURL, err := app.s3.PresignedPutObject(context.Background(), app.cfg.s3.bucket, fmt.Sprintf("%s", id), time.Minute*15)
+	presignedURL, err := app.s3.Snippet.PutPresignedURL(r.Context(), id.String(), time.Minute*15)
 	if err != nil {
 		WriteJSONError(w, http.StatusInternalServerError, "failed to generate presigned url")
 		return
 	}
 	snippet := snippetPrefetch{
 		ID:           id,
-		PresignedURL: presignedURL.String(),
+		PresignedURL: presignedURL,
 	}
 	WriteJSON(w, http.StatusOK, snippet)
 }
@@ -83,9 +81,9 @@ func (app *application) createSnippet(w http.ResponseWriter, r *http.Request) {
 	}
 	//verify at s3
 	objectName := req.ID.String()
-	_, err := app.s3.StatObject(r.Context(), app.cfg.s3.bucket, objectName, minio.StatObjectOptions{})
-	if err != nil {
-		app.logger.Error("object not found in s3", "error", err.Error())
+	exists, err := app.s3.Snippet.ObjectExists(r.Context(), objectName)
+	if err != nil || !exists {
+		app.logger.Error("object not found in s3", "error", err)
 		WriteJSONError(w, http.StatusBadRequest, "object not found in s3")
 		return
 	}
@@ -122,23 +120,53 @@ func (app *application) createSnippet(w http.ResponseWriter, r *http.Request) {
 func (app *application) getSnippet(w http.ResponseWriter, r *http.Request) {
 	shortCode := chi.URLParam(r, "short_code")
 
+	cachedSnippet, err := app.cache.Snippet.Get(r.Context(), shortCode)
+	if err == nil && cachedSnippet.ID != uuid.Nil {
+		app.logger.Info("cache hit")
+		objectName := cachedSnippet.ID.String()
+		expiry := time.Minute * 15
+
+		presignedURL, err := app.s3.Snippet.GetPresignedURL(r.Context(), objectName, expiry)
+		if err != nil {
+			app.logger.Error("failed to generate presigned url", "error", err.Error())
+			WriteJSONError(w, http.StatusInternalServerError, "failed to generate presigned url")
+			return
+		}
+		WriteJSON(w, http.StatusOK, map[string]string{
+			"presigned_url": presignedURL,
+		})
+		return
+	}
+
+	// Cache miss fetch from DB
+	if err != nil {
+		app.logger.Info("cache miss")
+	} else {
+		app.logger.Warn("cache returned zero UUID, falling back to DB")
+	}
+
 	snippet, err := app.db.Snippet.Get(r.Context(), shortCode)
 	if err != nil {
 		WriteJSONError(w, http.StatusGone, "snippet not found")
 		return
 	}
 
+	// write-around strategy
+	if err := app.cache.Snippet.Set(r.Context(), snippet); err != nil {
+		app.logger.Error("failed to cache snippet", "error", err.Error())
+	}
+
 	objectName := snippet.ID.String()
 	expiry := time.Minute * 15
 
-	presignedURL, err := app.s3.PresignedGetObject(r.Context(), app.cfg.s3.bucket, objectName, expiry, nil)
+	presignedURL, err := app.s3.Snippet.GetPresignedURL(r.Context(), objectName, expiry)
 	if err != nil {
 		app.logger.Error("failed to generate presigned url", "error", err.Error())
 		WriteJSONError(w, http.StatusInternalServerError, "failed to generate presigned url")
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]string{
-		"presigned_url": presignedURL.String(),
+		"presigned_url": presignedURL,
 	})
 
 }

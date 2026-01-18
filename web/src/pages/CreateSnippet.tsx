@@ -63,6 +63,7 @@ export function CreateSnippet() {
     mutationFn: async () => {
       // 1. Generate encryption key
       const encryptionKey = CryptoJS.lib.WordArray.random(32).toString()
+      console.log('🔑 Generated encryption key:', encryptionKey)
       
       // 2. Prepare data to encrypt
       const dataToEncrypt = JSON.stringify({
@@ -107,6 +108,7 @@ export function CreateSnippet() {
     },
     onSuccess: ({ shortCode, encryptionKey }) => {
       // Navigate to view page with encryption key in URL fragment
+      console.log('🚀 Navigating to:', `/${shortCode}#${encryptionKey}`)
       navigate(`/${shortCode}#${encryptionKey}`)
     },
   })
@@ -181,7 +183,7 @@ export function CreateSnippet() {
           <Label htmlFor="title">Title (Optional)</Label>
           <Input
             id="title"
-            placeholder="My awesome code snippet"
+            placeholder="Snippet Title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
@@ -238,7 +240,7 @@ export function CreateSnippet() {
           <div className={`grid gap-4 ${showPreview ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
             <Textarea
               id="code"
-              placeholder="Paste your code here... (Press Tab to indent)"
+              placeholder="Enter/Paste text here"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               onKeyDown={handleKeyDown}
