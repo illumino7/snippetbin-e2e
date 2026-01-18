@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useState, useEffect } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import CryptoJS from 'crypto-js'
+import { decrypt } from '@/lib/crypto'
 import { QRCodeSVG } from 'qrcode.react'
 import { Button } from '@/components/ui/button'
 import { Copy, Check, QrCode, X } from 'lucide-react'
@@ -70,15 +70,15 @@ export function ViewSnippet({ setShowNewSnippet }: { setShowNewSnippet: (show: b
         if (!response.ok) throw new Error('Failed to download snippet')
         const encryptedData = await response.text()
 
-        // Decrypt the data
-        const decrypted = CryptoJS.AES.decrypt(encryptedData, encryptionKey).toString(CryptoJS.enc.Utf8)
+        // Decrypt using AES-256-GCM
+        const decryptedString = await decrypt(encryptedData, encryptionKey)
         
-        if (!decrypted) {
+        if (!decryptedString) {
           setDecryptionError(true)
           return
         }
 
-        const parsedData: DecryptedData = JSON.parse(decrypted)
+        const parsedData: DecryptedData = JSON.parse(decryptedString)
         setDecryptedData(parsedData)
       } catch (error) {
         console.error('Decryption error:', error)

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom"
 import { NavigationMenu } from "@/components/ui/navigation-menu"
 import { Button } from "@/components/ui/button"
 import { ModeToggle } from "./mode-toggle"
+import { FileKey2, Info } from "lucide-react"
 import { useState } from "react"
 
 
@@ -12,12 +13,13 @@ export function Navbar({ className, showNewSnippet = false }: { className?: stri
   return (
     <header className={cn("flex items-center justify-between px-6 py-2 border-b", className)} role="banner">
       <NavigationMenu>
-        <Link to="/">
-          <h2 className="text-xl font-bold">SnippetBin</h2>
+        <Link to="/" className="flex items-center gap-2">
+          <FileKey2 className="h-6 w-6" />
+          <h2 className="text-2xl font-bold">SnippetBin</h2>
         </Link>
       </NavigationMenu>
       
-      <div className="ml-auto flex items-center gap-3">
+      <div className="ml-auto flex items-center gap-2">
         {showNewSnippet && (
           <Button 
             asChild 
@@ -41,13 +43,18 @@ export function Navbar({ className, showNewSnippet = false }: { className?: stri
                 "whitespace-nowrap transition-opacity duration-200 flex items-center gap-2",
                 isHovered ? "opacity-100" : "opacity-0 absolute pointer-events-none"
               )}>
-                {/* <span className="text-lg font-semibold"></span> */}
                 New Snippet
               </span>
             </Link>
           </Button>
         )}
         <ModeToggle />
+        <Button variant="ghost" size="icon" asChild>
+          <Link to="/about">
+            <Info className="h-5 w-5" />
+            <span className="sr-only">About</span>
+          </Link>
+        </Button>
       </div>
     </header>
   )

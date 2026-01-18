@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import CryptoJS from 'crypto-js'
+import { generateKey, encrypt } from '@/lib/crypto'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -11,24 +11,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button'
 
 const LANGUAGES = [
-  { value: 'javascript', label: 'JavaScript' },
-  { value: 'typescript', label: 'TypeScript' },
-  { value: 'python', label: 'Python' },
-  { value: 'go', label: 'Go' },
-  { value: 'java', label: 'Java' },
-  { value: 'rust', label: 'Rust' },
-  { value: 'cpp', label: 'C++' },
-  { value: 'c', label: 'C' },
-  { value: 'csharp', label: 'C#' },
-  { value: 'php', label: 'PHP' },
-  { value: 'ruby', label: 'Ruby' },
-  { value: 'sql', label: 'SQL' },
   { value: 'bash', label: 'Bash' },
-  { value: 'json', label: 'JSON' },
-  { value: 'yaml', label: 'YAML' },
-  { value: 'markdown', label: 'Markdown' },
-  { value: 'html', label: 'HTML' },
+  { value: 'c', label: 'C' },
+  { value: 'cpp', label: 'C++' },
+  { value: 'csharp', label: 'C#' },
   { value: 'css', label: 'CSS' },
+  { value: 'go', label: 'Go' },
+  { value: 'html', label: 'HTML' },
+  { value: 'java', label: 'Java' },
+  { value: 'javascript', label: 'JavaScript' },
+  { value: 'json', label: 'JSON' },
+  { value: 'markdown', label: 'Markdown' },
+  { value: 'php', label: 'PHP' },
+  { value: 'python', label: 'Python' },
+  { value: 'ruby', label: 'Ruby' },
+  { value: 'rust', label: 'Rust' },
+  { value: 'sql', label: 'SQL' },
+  { value: 'typescript', label: 'TypeScript' },
+  { value: 'yaml', label: 'YAML' },
 ]
 
 const EXPIRATIONS = [
@@ -55,15 +55,14 @@ export function CreateSnippet() {
   const navigate = useNavigate()
   const [title, setTitle] = useState('')
   const [code, setCode] = useState('')
-  const [language, setLanguage] = useState('javascript')
+  const [language, setLanguage] = useState('markdown')
   const [expiration, setExpiration] = useState('1d')
   const [showPreview, setShowPreview] = useState(true)
 
   const createSnippetMutation = useMutation({
     mutationFn: async () => {
-      // 1. Generate encryption key
-      const encryptionKey = CryptoJS.lib.WordArray.random(32).toString()
-      console.log('🔑 Generated encryption key:', encryptionKey)
+      // 1. Generate 256-bit encryption key
+      const encryptionKey = await generateKey()
       
       // 2. Prepare data to encrypt
       const dataToEncrypt = JSON.stringify({
@@ -72,8 +71,8 @@ export function CreateSnippet() {
         language,
       })
       
-      // 3. Encrypt the data
-      const encrypted = CryptoJS.AES.encrypt(dataToEncrypt, encryptionKey).toString()
+      // 3. Encrypt using AES-256-GCM
+      const encrypted = await encrypt(dataToEncrypt, encryptionKey)
       
       // 4. Fetch presigned URL
       const presignedRes = await fetch('/api/snippets/presigned')
@@ -107,8 +106,6 @@ export function CreateSnippet() {
       return { shortCode: createData.short_code, encryptionKey }
     },
     onSuccess: ({ shortCode, encryptionKey }) => {
-      // Navigate to view page with encryption key in URL fragment
-      console.log('🚀 Navigating to:', `/${shortCode}#${encryptionKey}`)
       navigate(`/${shortCode}#${encryptionKey}`)
     },
   })
@@ -175,7 +172,7 @@ export function CreateSnippet() {
 
   return (
     <div className="container mx-auto max-w-7xl p-6">
-      <h1 className="text-3xl font-bold mb-6">Create New Snippet</h1>
+      <h1 className="text-xl font-bold mb-6">New Snippet</h1>
       
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Title */}
@@ -197,7 +194,11 @@ export function CreateSnippet() {
               <SelectTrigger id="language">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent 
+                position="popper" 
+                sideOffset={4} 
+                className="bg-background"
+              >
                 {LANGUAGES.map((lang) => (
                   <SelectItem key={lang.value} value={lang.value}>
                     {lang.label}
@@ -213,7 +214,7 @@ export function CreateSnippet() {
               <SelectTrigger id="expiration">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" sideOffset={4} className="max-h-[200px] overflow-y-auto bg-background">
                 {EXPIRATIONS.map((exp) => (
                   <SelectItem key={exp.value} value={exp.value}>
                     {exp.label}

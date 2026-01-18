@@ -3,6 +3,7 @@ import { Navbar } from './components/navbar'
 import { ThemeProvider } from './components/theme-provider'
 import { CreateSnippet } from './pages/CreateSnippet'
 import { ViewSnippet } from './pages/ViewSnippet'
+import { About } from './pages/About'
 import { useState, useEffect } from 'react'
 
 function App() {
@@ -11,7 +12,7 @@ function App() {
   
   // Reset button visibility when navigating to home
   useEffect(() => {
-    if (location.pathname === '/') {
+    if (location.pathname === '/' || location.pathname === '/about') {
       setShowNewSnippet(false)
     }
   }, [location.pathname])
@@ -21,6 +22,7 @@ function App() {
       <Navbar className="bg-background sticky top-0 z-50 w-full" showNewSnippet={showNewSnippet} />
       <Routes>
         <Route path="/" element={<CreateSnippet />} />
+        <Route path="/about" element={<About />} />
         <Route path="/:shortCode" element={<ViewSnippet setShowNewSnippet={setShowNewSnippet} />} />
       </Routes>
     </ThemeProvider>
