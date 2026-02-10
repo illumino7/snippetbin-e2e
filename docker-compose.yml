@@ -38,6 +38,7 @@ services:
       /bin/sh -c "
       /usr/bin/mc alias set local http://s3:9000 admin adminpassword;
       /usr/bin/mc mb --ignore-existing local/snippets;
+      /usr/bin/mc ilm rule add local/snippets --expire-days 365 --prefix '' || true;
       exit 0;
       "
   
