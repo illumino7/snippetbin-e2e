@@ -10,6 +10,7 @@ import (
 	"github.com/illumino7/snippetbin-e2e/internal/cache"
 	"github.com/illumino7/snippetbin-e2e/internal/db"
 	"github.com/illumino7/snippetbin-e2e/internal/env"
+	"github.com/illumino7/snippetbin-e2e/internal/ratelimiter"
 	"github.com/illumino7/snippetbin-e2e/internal/s3"
 )
 
@@ -66,12 +67,16 @@ func main() {
 	logger.Info("valkey connection established")
 	cacheStore := cache.NewValkeyStore(valkey)
 
+	// Rate limiter: 20 requests per minute per IP
+	rl := ratelimiter.NewFixedWindowRateLimiter(valkey, 20, time.Minute)
+
 	app := application{
-		logger: logger,
-		db:     store,
-		s3:     s3Store,
-		cache:  cacheStore,
-		cfg:    cfg,
+		logger:      logger,
+		db:          store,
+		s3:          s3Store,
+		cache:       cacheStore,
+		cfg:         cfg,
+		rateLimiter: rl,
 	}
 
 	//testing minio s3 connection

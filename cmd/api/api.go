@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/illumino7/snippetbin-e2e/internal/cache"
 	"github.com/illumino7/snippetbin-e2e/internal/db"
+	"github.com/illumino7/snippetbin-e2e/internal/ratelimiter"
 	"github.com/illumino7/snippetbin-e2e/internal/s3"
 )
 
@@ -40,11 +41,12 @@ type config struct {
 }
 
 type application struct {
-	logger *slog.Logger
-	db     db.Storage
-	s3     s3.Storage
-	cache  cache.Storage
-	cfg    config
+	logger      *slog.Logger
+	db          db.Storage
+	s3          s3.Storage
+	cache       cache.Storage
+	cfg         config
+	rateLimiter ratelimiter.Limiter
 }
 
 func (app *application) routes() http.Handler {
@@ -60,9 +62,16 @@ func (app *application) routes() http.Handler {
 	//routes
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", health)
-		r.Get("/snippets/presigned", app.presignedURL)
-		r.Post("/snippets", app.createSnippet)
+
+		// Public: reading snippets
 		r.Get("/snippets/{short_code}", app.getSnippet)
+
+		// Rate limited: creating snippets
+		r.Group(func(r chi.Router) {
+			r.Use(rateLimitMiddleware(app.rateLimiter))
+			r.Get("/snippets/presigned", app.presignedURL)
+			r.Post("/snippets", app.createSnippet)
+		})
 	})
 
 	return r
