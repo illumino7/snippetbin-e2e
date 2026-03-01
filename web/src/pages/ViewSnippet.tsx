@@ -3,17 +3,22 @@ import { useQuery } from '@tanstack/react-query'
 import { useState, useEffect } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { decrypt } from '@/lib/crypto'
+import { isMarkdown } from '@/lib/languageMap'
 import { QRCodeSVG } from 'qrcode.react'
 import { Button } from '@/components/ui/button'
-import { Copy, Check, QrCode, X } from 'lucide-react'
+import { Copy, Check, QrCode, X, Code, Eye } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface SnippetMetadata {
   presigned_url: string
 }
 
 interface DecryptedData {
-  title?: string
+  filename?: string
+  title?: string // backwards compat
   code: string
   language: string
 }
@@ -26,6 +31,11 @@ export function ViewSnippet({ setShowNewSnippet }: { setShowNewSnippet: (show: b
   const [decryptionError, setDecryptionError] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showQR, setShowQR] = useState(false)
+  const [activeTab, setActiveTab] = useState<'code' | 'preview'>('preview')
+
+  // Derive display name and markdown status
+  const displayName = decryptedData?.filename || decryptedData?.title || 'Untitled'
+  const isMd = decryptedData ? isMarkdown(decryptedData.filename || '') : false
 
   // Control navbar button visibility - only show when successfully decrypted
   useEffect(() => {
@@ -34,7 +44,7 @@ export function ViewSnippet({ setShowNewSnippet }: { setShowNewSnippet: (show: b
 
   // Extract encryption key from URL fragment
   useEffect(() => {
-    const hash = window.location.hash.slice(1) // Remove the '#'
+    const hash = window.location.hash.slice(1)
     if (hash) {
       setEncryptionKey(hash)
     } else {
@@ -56,7 +66,7 @@ export function ViewSnippet({ setShowNewSnippet }: { setShowNewSnippet: (show: b
       return response.json()
     },
     enabled: !!shortCode,
-    staleTime: 14 * 60 * 1000, // 14 minutes
+    staleTime: 14 * 60 * 1000,
   })
 
   // Download and decrypt snippet when metadata is available
@@ -65,12 +75,10 @@ export function ViewSnippet({ setShowNewSnippet }: { setShowNewSnippet: (show: b
 
     const downloadAndDecrypt = async () => {
       try {
-        // Download encrypted blob from S3
         const response = await fetch(metadata.presigned_url)
         if (!response.ok) throw new Error('Failed to download snippet')
         const encryptedData = await response.text()
 
-        // Decrypt using AES-256-GCM
         const decryptedString = await decrypt(encryptedData, encryptionKey)
         
         if (!decryptedString) {
@@ -96,13 +104,11 @@ export function ViewSnippet({ setShowNewSnippet }: { setShowNewSnippet: (show: b
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const getFullUrl = () => {
-    return window.location.href // Includes the fragment (#key)
-  }
+  const getFullUrl = () => window.location.href
 
   if (isLoading) {
     return (
-      <div className="container mx-auto max-w-6xl p-6">
+      <div className="container mx-auto max-w-5xl p-6">
         <div className="flex items-center justify-center min-h-[400px]">
           <p className="text-muted-foreground">Loading snippet...</p>
         </div>
@@ -112,7 +118,7 @@ export function ViewSnippet({ setShowNewSnippet }: { setShowNewSnippet: (show: b
 
   if (isError) {
     return (
-      <div className="container mx-auto max-w-6xl p-6">
+      <div className="container mx-auto max-w-5xl p-6">
         <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
           <h1 className="text-2xl font-bold">Snippet Not Found</h1>
           <p className="text-muted-foreground">This snippet may have expired or never existed.</p>
@@ -124,7 +130,7 @@ export function ViewSnippet({ setShowNewSnippet }: { setShowNewSnippet: (show: b
 
   if (decryptionError || !encryptionKey) {
     return (
-      <div className="container mx-auto max-w-6xl p-6">
+      <div className="container mx-auto max-w-5xl p-6">
         <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
           <h1 className="text-2xl font-bold">Decryption Failed</h1>
           <p className="text-muted-foreground text-center max-w-md">
@@ -139,7 +145,7 @@ export function ViewSnippet({ setShowNewSnippet }: { setShowNewSnippet: (show: b
 
   if (!decryptedData) {
     return (
-      <div className="container mx-auto max-w-6xl p-6">
+      <div className="container mx-auto max-w-5xl p-6">
         <div className="flex items-center justify-center min-h-[400px]">
           <p className="text-muted-foreground">Decrypting snippet...</p>
         </div>
@@ -148,47 +154,107 @@ export function ViewSnippet({ setShowNewSnippet }: { setShowNewSnippet: (show: b
   }
 
   return (
-    <div className="container mx-auto max-w-6xl p-6">
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-start justify-between">
-          <div>
-            {decryptedData.title && (
-              <h1 className="text-3xl font-bold mb-2">{decryptedData.title}</h1>
-            )}
-            <p className="text-sm text-muted-foreground">
-              Language: {decryptedData.language}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleCopy}
-              className="gap-2"
-            >
-              {copied ? (
+    <div className="container mx-auto max-w-5xl p-6">
+      <div className="space-y-4">
+        {/* Content Card */}
+        <div className="rounded-lg border overflow-hidden">
+          {/* Tab Header */}
+          <div className="flex items-center justify-between border-b bg-muted/30">
+            <div className="flex items-center gap-0">
+              {/* Filename */}
+              <div className="px-4 py-2.5 border-r">
+                <span className="text-sm font-medium">{displayName}</span>
+              </div>
+
+              {/* Tabs for markdown files */}
+              {isMd && (
                 <>
-                  <Check className="h-4 w-4" />
-                  Copied!
-                </>
-              ) : (
-                <>
-                  <Copy className="h-4 w-4" />
-                  Copy Snippet
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('code')}
+                    className={cn(
+                      "flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors",
+                      activeTab === 'code'
+                        ? "border-primary text-foreground"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Code className="h-4 w-4" />
+                    Code
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('preview')}
+                    className={cn(
+                      "flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors",
+                      activeTab === 'preview'
+                        ? "border-primary text-foreground"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Eye className="h-4 w-4" />
+                    Preview
+                  </button>
                 </>
               )}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowQR(true)}
-              className="gap-2"
-            >
-              <QrCode className="h-4 w-4" />
-              QR Code
-            </Button>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-1 px-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCopy}
+                className="gap-1.5 h-8"
+              >
+                {copied ? (
+                  <>
+                    <Check className="h-3.5 w-3.5" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3.5 w-3.5" />
+                    Copy
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowQR(true)}
+                className="gap-1.5 h-8"
+              >
+                <QrCode className="h-3.5 w-3.5" />
+                QR
+              </Button>
+            </div>
           </div>
+
+          {/* Content */}
+          {isMd && activeTab === 'preview' ? (
+            <div className="p-6">
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {decryptedData.code}
+                </ReactMarkdown>
+              </div>
+            </div>
+          ) : (
+            <SyntaxHighlighter
+              language={decryptedData.language}
+              style={vscDarkPlus}
+              customStyle={{
+                margin: 0,
+                padding: '1.5rem',
+                fontSize: '0.875rem',
+                borderRadius: 0,
+              }}
+              showLineNumbers
+            >
+              {decryptedData.code}
+            </SyntaxHighlighter>
+          )}
         </div>
 
         {/* QR Code Modal */}
@@ -217,24 +283,6 @@ export function ViewSnippet({ setShowNewSnippet }: { setShowNewSnippet: (show: b
             </div>
           </div>
         )}
-
-        {/* Code Display */}
-        <div className="rounded-md overflow-hidden border">
-          <SyntaxHighlighter
-            language={decryptedData.language}
-            style={vscDarkPlus}
-            customStyle={{
-              margin: 0,
-              padding: '1.5rem',
-              fontSize: '0.875rem',
-            }}
-            showLineNumbers
-          >
-            {decryptedData.code}
-          </SyntaxHighlighter>
-        </div>
-
-
       </div>
     </div>
   )

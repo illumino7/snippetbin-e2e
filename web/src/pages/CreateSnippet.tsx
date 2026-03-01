@@ -3,33 +3,15 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { generateKey, encrypt } from '@/lib/crypto'
+import { getLanguageFromFilename, isMarkdown } from '@/lib/languageMap'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-
-const LANGUAGES = [
-  { value: 'bash', label: 'Bash' },
-  { value: 'c', label: 'C' },
-  { value: 'cpp', label: 'C++' },
-  { value: 'csharp', label: 'C#' },
-  { value: 'css', label: 'CSS' },
-  { value: 'go', label: 'Go' },
-  { value: 'html', label: 'HTML' },
-  { value: 'java', label: 'Java' },
-  { value: 'javascript', label: 'JavaScript' },
-  { value: 'json', label: 'JSON' },
-  { value: 'markdown', label: 'Markdown' },
-  { value: 'php', label: 'PHP' },
-  { value: 'python', label: 'Python' },
-  { value: 'ruby', label: 'Ruby' },
-  { value: 'rust', label: 'Rust' },
-  { value: 'sql', label: 'SQL' },
-  { value: 'typescript', label: 'TypeScript' },
-  { value: 'yaml', label: 'YAML' },
-]
+import { Code, Eye } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 const EXPIRATIONS = [
   { value: '10min', label: '10 Minutes' },
@@ -53,11 +35,13 @@ interface CreateSnippetResponse {
 
 export function CreateSnippet() {
   const navigate = useNavigate()
-  const [title, setTitle] = useState('')
+  const [filename, setFilename] = useState('')
   const [code, setCode] = useState('')
-  const [language, setLanguage] = useState('markdown')
   const [expiration, setExpiration] = useState('1d')
-  const [showPreview, setShowPreview] = useState(true)
+  const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit')
+
+  const language = getLanguageFromFilename(filename)
+  const showPreviewTab = isMarkdown(filename)
 
   const createSnippetMutation = useMutation({
     mutationFn: async () => {
@@ -66,7 +50,7 @@ export function CreateSnippet() {
       
       // 2. Prepare data to encrypt
       const dataToEncrypt = JSON.stringify({
-        title,
+        filename,
         code,
         language,
       })
@@ -112,7 +96,7 @@ export function CreateSnippet() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!code.trim()) return
+    if (!code.trim() || !filename.trim()) return
     createSnippetMutation.mutate()
   }
 
@@ -136,25 +120,19 @@ export function CreateSnippet() {
     if (e.key === 'Enter') {
       e.preventDefault()
       
-      // Get current line
       const beforeCursor = code.substring(0, start)
       const currentLineStart = beforeCursor.lastIndexOf('\n') + 1
       const currentLine = beforeCursor.substring(currentLineStart)
       
-      // Calculate current indentation
       const indentMatch = currentLine.match(/^(\s*)/)
       const currentIndent = indentMatch ? indentMatch[1] : ''
       
-      // Determine if we need extra indentation
       let extraIndent = ''
       const trimmedLine = currentLine.trim()
       
-      // Python: indent after colon (def, if, for, while, class, etc.)
       if (language === 'python' && trimmedLine.endsWith(':')) {
         extraIndent = '  '
-      }
-      // Bracket-based languages: indent after opening bracket
-      else if (['javascript', 'typescript', 'java', 'c', 'cpp', 'csharp', 'go', 'rust', 'php'].includes(language)) {
+      } else if (['javascript', 'typescript', 'java', 'c', 'cpp', 'csharp', 'go', 'rust', 'php'].includes(language)) {
         if (trimmedLine.endsWith('{') || trimmedLine.endsWith('[') || trimmedLine.endsWith('(')) {
           extraIndent = '  '
         }
@@ -171,50 +149,91 @@ export function CreateSnippet() {
   }
 
   return (
-    <div className="container mx-auto max-w-7xl p-6">
-      <h1 className="text-xl font-bold mb-6">New Snippet</h1>
-      
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Title */}
-        <div className="space-y-2">
-          <Label htmlFor="title">Title (Optional)</Label>
-          <Input
-            id="title"
-            placeholder="Snippet Title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-        </div>
-
-        {/* Language and Expiration Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="language">Syntax Highlighting</Label>
-            <Select value={language} onValueChange={setLanguage}>
-              <SelectTrigger id="language">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent 
-                position="popper" 
-                sideOffset={4} 
-                className="bg-background"
+    <div className="container mx-auto max-w-5xl p-6">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Editor Card */}
+        <div className="rounded-lg border overflow-hidden">
+          {/* Tab Header */}
+          <div className="flex items-center gap-0 border-b bg-muted/30">
+            {/* Filename Input */}
+            <div className="px-3 py-2 border-r">
+              <Input
+                placeholder="Filename with extension"
+                value={filename}
+                onChange={(e) => setFilename(e.target.value)}
+                className="h-8 w-64 text-sm border-0 bg-background focus-visible:ring-1"
+                required
+              />
+            </div>
+            
+            {/* Tabs */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('edit')}
+              className={cn(
+                "flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors",
+                activeTab === 'edit'
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Code className="h-4 w-4" />
+              Edit new file
+            </button>
+            
+            {showPreviewTab && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('preview')}
+                className={cn(
+                  "flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors",
+                  activeTab === 'preview'
+                    ? "border-primary text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                )}
               >
-                {LANGUAGES.map((lang) => (
-                  <SelectItem key={lang.value} value={lang.value}>
-                    {lang.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                <Eye className="h-4 w-4" />
+                Preview
+              </button>
+            )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="expiration">Expiration</Label>
+          {/* Editor / Preview Content */}
+          {activeTab === 'edit' ? (
+            <div className="relative">
+              <textarea
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Enter or paste content here..."
+                className="w-full min-h-[500px] p-4 font-mono text-sm bg-background resize-y outline-none"
+                required
+              />
+            </div>
+          ) : (
+            <div className="min-h-[500px] p-6">
+              {code ? (
+                <div className="prose prose-sm dark:prose-invert max-w-none">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {code}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-sm">Nothing to preview</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Bottom Bar: Expiration + Submit */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Expires in:</span>
             <Select value={expiration} onValueChange={setExpiration}>
-              <SelectTrigger id="expiration">
+              <SelectTrigger className="w-36 h-9">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent position="popper" sideOffset={4} className="max-h-[200px] overflow-y-auto bg-background">
+              <SelectContent position="popper" sideOffset={4} className="bg-background">
                 {EXPIRATIONS.map((exp) => (
                   <SelectItem key={exp.value} value={exp.value}>
                     {exp.label}
@@ -223,67 +242,21 @@ export function CreateSnippet() {
               </SelectContent>
             </Select>
           </div>
-        </div>
 
-        {/* Code Editor with Side-by-Side Preview */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="code">New Snippet</Label>
-            <button
-              type="button"
-              onClick={() => setShowPreview(!showPreview)}
-              className="text-sm text-muted-foreground hover:text-foreground"
-            >
-              {showPreview ? 'Hide Preview' : 'Show Preview'}
-            </button>
-          </div>
-          
-          <div className={`grid gap-4 ${showPreview ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
-            <Textarea
-              id="code"
-              placeholder="Enter/Paste text here"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="font-mono min-h-[500px] resize-y"
-              required
-            />
-            
-            {showPreview && code && (
-              <div className="rounded-md overflow-hidden border min-h-[500px]">
-                <SyntaxHighlighter
-                  language={language}
-                  style={vscDarkPlus}
-                  customStyle={{
-                    margin: 0,
-                    padding: '1rem',
-                    fontSize: '0.875rem',
-                    height: '100%',
-                  }}
-                  showLineNumbers
-                >
-                  {code}
-                </SyntaxHighlighter>
-              </div>
+          <div className="flex items-center gap-3">
+            {createSnippetMutation.isError && (
+              <p className="text-sm text-destructive">
+                Failed to create snippet.
+              </p>
             )}
+            <Button
+              type="submit"
+              disabled={createSnippetMutation.isPending || !code.trim() || !filename.trim()}
+            >
+              {createSnippetMutation.isPending ? 'Creating...' : 'Create Snippet'}
+            </Button>
           </div>
         </div>
-
-        {/* Submit Button */}
-        <Button
-          type="submit"
-          size="lg"
-          disabled={createSnippetMutation.isPending || !code.trim()}
-          className="w-full md:w-auto"
-        >
-          {createSnippetMutation.isPending ? 'Creating...' : 'Create Snippet'}
-        </Button>
-
-        {createSnippetMutation.isError && (
-          <p className="text-sm text-destructive">
-            Failed to create snippet. Please try again.
-          </p>
-        )}
       </form>
     </div>
   )
