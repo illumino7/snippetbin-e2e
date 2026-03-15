@@ -82,10 +82,10 @@ export function About() {
       {/* Open Source */}
       <section className="text-center py-6 border-t">
         <p className="text-muted-foreground mb-4">
-          SnippetBin is open source
+          SnippetBin-E2E is open source
         </p>
         <Button variant="outline" asChild>
-          <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="gap-2">
+          <a href="https://github.com/illumino7/snippetbin-e2e" target="_blank" rel="noopener noreferrer" className="gap-2">
             <Github className="h-4 w-4" />
             View on GitHub
           </a>

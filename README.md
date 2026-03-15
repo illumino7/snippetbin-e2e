@@ -9,22 +9,60 @@ A self-hostable, end-to-end encrypted code snippet sharing platform — like Pas
 3. **Share** — Get a short URL with the decryption key in the URL fragment (`#key=...`), which is never sent to the server
 4. **Expire** — Snippets auto-expire after a configurable duration (10 min to 1 year)
 
+## Screenshots
+
+<table align="center">
+  <tr>
+    <td align="center"><b>Home Page (Light)</b><br><img src="./assets/Home_Page_Light.png" alt="Home Page Light" width="400"/></td>
+    <td align="center"><b>Home Page (Dark)</b><br><img src="./assets/Home_Page_Dark.png" alt="Home Page Dark" width="400"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Markdown Preview (Light)</b><br><img src="./assets/Snippet_Markdown_Preview_Light.png" alt="Markdown Preview Light" width="400"/></td>
+    <td align="center"><b>Markdown Preview (Dark)</b><br><img src="./assets/Snippet_Markdown_Preview_Dark.png" alt="Markdown Preview Dark" width="400"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Snippet View (Light)</b><br><img src="./assets/Snippet_View_Light.png" alt="Snippet View Light" width="400"/></td>
+    <td align="center"><b>Snippet View (Dark)</b><br><img src="./assets/Snippet_View_Dark.png" alt="Snippet View Dark" width="400"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>View Section Syntax Highlight (Light)</b><br><img src="./assets/Snippet_View_Syntax_Highlight_Light.png" alt="Syntax Highlight Light" width="400"/></td>
+    <td align="center"><b>View Section Syntax Highlight (Dark)</b><br><img src="./assets/Snippet_View_Syntax_Highlight_Dark.png" alt="Syntax Highlight Dark" width="400"/></td>
+  </tr>
+</table>
+
 ## Architecture
 
-```
-┌─────────────┐     ┌──────────────┐     ┌──────────────┐
-│   React UI  │────▶│   Go API     │────▶│  PostgreSQL  │
-│  (Vite/TS)  │     │  (Chi/5050)  │     │  (pg_cron)   │
-└──────┬──────┘     └──────┬───────┘     └──────────────┘
-       │                   │
-       │              ┌────┴─────┐
-       │              │          │
-       ▼              ▼          ▼
-  AES-256-GCM    ┌────────┐ ┌────────┐
-  (client-side)  │ MinIO  │ │ Valkey │
-                 │  (S3)  │ │(cache) │
-                 └────────┘ └────────┘
-```
+### 1. Snippet Origin Flow (Mermaid Event Diagram)
+
+The server never sees the plaintext. All encryption happens locally in the browser using the Web Crypto API.
+
+<div align="center">
+  <img src="./assets/Event_Diagram.png" alt="Snippet Origin Flow Event Diagram" width="600"/>
+</div>
+
+### 2. General Presigned URL Flow
+
+This diagram covers the isolated presigned URL generation flow when communicating with standard S3/MinIO APIs:
+
+<div align="center">
+  <img src="./assets/presigned-flow.png" alt="Presigned URL Upload Flow" width="600"/>
+</div>
+
+### 3. Snippet Creation Flow
+
+The snippet creation flow in SnippetBin E2E combines the localized Web Crypto AES encryption with the presigned URL backend flow:
+
+<div align="center">
+  <img src="./assets/snippet_creation_flow.png" alt="Snippet Creation Sequence Flow" width="600"/>
+</div>
+
+### 4. Snippet Fetch Flow
+
+Retrieving a snippet involves fetching the pre-signed URL from the Go API Server, downloading the ciphertext directly from MinIO, and decrypting it locally in the browser using the AES key from the URL fragment.
+
+<div align="center">
+  <img src="./assets/snippet-fetch-flow.png" alt="Snippet Fetch Sequence Flow" width="600"/>
+</div>
 
 ### Backend — Go
 
